@@ -1,0 +1,19 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Twinstar LED",
+        "description": "Enter the Bluetooth MAC address of the primary controller. Add a second address only if you use a linked slave unit.",
+        "data": {
+          "primary_mac": "Primary MAC address",
+          "slave_mac": "Slave MAC address (optional)"
+        }
+      }
+    },
+    "error": {
+      "invalid_mac": "The MAC address format is not valid.",
+      "same_mac": "Primary and slave addresses must be different.",
+      "unknown": "Something went wrong. Try again."
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "domain": "twinstar",
+  "name": "Twinstar LED",
+  "codeowners": [],
+  "config_flow": true,
+  "dependencies": ["bluetooth"],
+  "documentation": "https://www.home-assistant.io/",
+  "integration_type": "device",
+  "iot_class": "local_polling",
+  "loggers": ["custom_components.twinstar"],
+  "requirements": ["bleak>=0.21.0"],
+  "version": "1.0.0"
+}
