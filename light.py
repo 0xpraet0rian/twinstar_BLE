@@ -45,22 +45,10 @@ async def async_setup_entry(
     slave = (entry.data.get(CONF_SLAVE_MAC) or "").strip()
 
     entities: list[TwinstarLightEntity] = [
-        TwinstarLightEntity(
-            entry,
-            primary,
-            "main",
-            "Main",
-        )
+        TwinstarLightEntity(entry, primary, "main", "Main")
     ]
     if slave:
-        entities.append(
-            TwinstarLightEntity(
-                entry,
-                slave,
-                "slave",
-                "Slave",
-            )
-        )
+        entities.append(TwinstarLightEntity(entry, slave, "slave", "Slave"))
     async_add_entities(entities, update_before_add=True)
 
     async def _poll(_: datetime | None = None) -> None:
@@ -121,6 +109,11 @@ class TwinstarLightEntity(LightEntity):
         self._attr_available = True
         self._attr_is_on: bool | None = None
         self._attr_brightness: int | None = None
+        # Mirrors ESPHome twinstar_output_phys_on: tracks whether the light has
+        # been commanded ON over BLE. Sending ON to an already-on, fully-ramped
+        # Twinstar restarts its internal fade-in from 0%, causing a visible
+        # brightness drop back to ~28%.
+        self._phys_on: bool = False
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -148,15 +141,21 @@ class TwinstarLightEntity(LightEntity):
                         connect_timeout=BLE_CONNECT_TIMEOUT,
                     )
                     await asyncio.sleep(0.05)
-                await send_command(
-                    self._mac,
-                    "ON",
-                    connect_timeout=BLE_CONNECT_TIMEOUT,
-                )
+                # Only send ON if not already physically on — sending ON to an
+                # already-on Twinstar restarts its fade-in from 0%.
+                if not self._phys_on:
+                    await send_command(
+                        self._mac,
+                        "ON",
+                        connect_timeout=BLE_CONNECT_TIMEOUT,
+                    )
         except BleakError as err:
             _LOGGER.error("Twinstar turn_on failed (%s): %s", self._mac, err)
             self._attr_available = False
+            self._phys_on = False
             return
+        # Mark physically on regardless of whether ON command was sent
+        self._phys_on = True
         self._attr_is_on = True
         if brightness is not None:
             self._attr_brightness = brightness
@@ -175,6 +174,7 @@ class TwinstarLightEntity(LightEntity):
             _LOGGER.error("Twinstar turn_off failed (%s): %s", self._mac, err)
             self._attr_available = False
             return
+        self._phys_on = False
         self._attr_is_on = False
         self._attr_brightness = 0
         self._attr_available = True
@@ -197,6 +197,11 @@ class TwinstarLightEntity(LightEntity):
             except BleakError as err:
                 _LOGGER.debug("Twinstar update failed (%s): %s", self._mac, err)
                 self._attr_available = False
+                # Clear the physical-on flag on disconnect so the next turn_on
+                # sends a fresh ON command (mirrors ESPHome on_disconnect behaviour)
+                self._phys_on = False
+                self._attr_brightness = None
+                self._attr_is_on = None
                 return
 
         power = _parse_power_reply(power_raw)
